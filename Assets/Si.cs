@@ -8,7 +8,11 @@ public class Si : MonoBehaviour
     public int height = 21;
     public GameObject wallPrefab;
     public GameObject floorPrefab;
-    public GameObject pathPrefab; 
+    public GameObject pathPrefab;
+    public GameObject playerPrefab; 
+    private Transform player;
+    public float moveSpeed = 1f; 
+    bool isMoving = false;
 
     int[,] map;
     bool[,] visited;
@@ -18,10 +22,31 @@ public class Si : MonoBehaviour
     System.Random rand = new System.Random();
 
     void Start()
-    {
-        RegenerateMaze();
-    }
+    { 
 
+        Vector3 startPos = new Vector3(1, 0.5f, 1);
+        player = Instantiate(playerPrefab, startPos, Quaternion.identity).transform;
+    }
+    public void StartMove()
+    {
+        if (!isMoving)
+            StartCoroutine(MoveAlongPath());
+    }
+    IEnumerator MoveAlongPath()
+    {
+        isMoving = true;
+
+        foreach (var p in path)
+        {
+            Vector3 targetPos = new Vector3(p.x, 0.5f, p.y);
+
+            player.position = targetPos;
+
+            yield return new WaitForSeconds(0.2f);
+        }
+
+        isMoving = false;
+    }
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.Space))
@@ -31,15 +56,14 @@ public class Si : MonoBehaviour
             ShowPath();
     }
 
-    void RegenerateMaze()
+    public void RegenerateMaze()
     {
         ClearOldObjects();
         GenerateMaze();
 
-        visited = new bool[height, width];
         path.Clear();
-        bool ok = SearchMaze(1, 1);
 
+        bool ok = FindPathBFS();
         if (!ok)
         {
             RegenerateMaze();
@@ -154,11 +178,65 @@ public class Si : MonoBehaviour
         }
     }
 
-    void ShowPath()
+    public void ShowPath()
     {
         foreach (var p in path)
         {
             Instantiate(pathPrefab, new Vector3(p.x, 0.5f, p.y), Quaternion.identity, transform);
         }
     }
+
+    bool FindPathBFS()
+    {
+        int w = width;
+        int h = height;
+
+        visited = new bool[h, w];
+        Vector2Int?[,] parent = new Vector2Int?[h, w];
+
+        Queue<Vector2Int> q = new Queue<Vector2Int>();
+        q.Enqueue(new Vector2Int(1, 1));
+        visited[1, 1] = true;
+
+        while (q.Count > 0)
+        {
+            Vector2Int cur = q.Dequeue();
+
+            if (cur == goal)
+            {
+                ReconstructPath(parent);
+                return true;
+            }
+
+            foreach (var d in dirs)
+            {
+                int nx = cur.x + d.x;
+                int ny = cur.y + d.y;
+
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                if (map[ny, nx] == 1) continue;
+                if (visited[ny, nx]) continue;
+
+                visited[ny, nx] = true;
+                parent[ny, nx] = cur;
+                q.Enqueue(new Vector2Int(nx, ny));
+            }
+        }
+
+        return false; // 도달 실패
+    }
+    void ReconstructPath(Vector2Int?[,] parent)
+    {
+        path.Clear();
+        Vector2Int? cur = goal;
+
+        while (cur.HasValue)
+        {
+            path.Add(cur.Value);
+            cur = parent[cur.Value.y, cur.Value.x];
+        }
+
+        path.Reverse();
+    }
+
 }
