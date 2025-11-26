@@ -667,13 +667,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b75d1826ef350946a2b6648fd50ea9a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  width: 15
-  height: 15
+  width: 25
+  height: 25
   wallPrefab: {fileID: 8945536826742419333, guid: bfe4342cd3f40db44a3adc231e89e9d4, type: 3}
-  floorPrefab: {fileID: 2222413617856789494, guid: a88043b2c20554340ba3df47b8c0c600, type: 3}
+  groundPrefab: {fileID: 2222413617856789494, guid: a88043b2c20554340ba3df47b8c0c600, type: 3}
+  forestPrefab: {fileID: 3882638802970950603, guid: a367e2e270285654ba714b1a9d839f9d, type: 3}
+  mudPrefab: {fileID: 7843498741191971564, guid: 550fd51033c788347b206fb6d5a32fc3, type: 3}
   pathPrefab: {fileID: 9220803092853138994, guid: b675996192ee30d41ac981d2a9cb2a23, type: 3}
   playerPrefab: {fileID: 3680795701449215803, guid: ff2fd0737ef5ee943a53d4a4fdfb571f, type: 3}
-  moveSpeed: 1
 --- !u!4 &1011603977
 Transform:
   m_ObjectHideFlags: 0
@@ -1119,7 +1120,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1011603976}
         m_TargetAssemblyTypeName: Si, Assembly-CSharp
-        m_MethodName: ShowPath
+        m_MethodName: ShowShortestPath
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
