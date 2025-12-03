@@ -13,12 +13,11 @@ public class Si : MonoBehaviour
     public GameObject mudPrefab;
     public GameObject pathPrefab;
     public GameObject playerPrefab;
-    bool isMoving = false;
+
     private Transform player;
+    private bool isMoving = false;
 
-    float noiseRate = 0.18f;
-
-    int[,] map;                    
+    int[,] map;
     List<Vector2Int> path = new List<Vector2Int>();
     Vector2Int goal;
     System.Random rand = new System.Random();
@@ -28,7 +27,7 @@ public class Si : MonoBehaviour
         new Vector2Int(1,0),
         new Vector2Int(-1,0),
         new Vector2Int(0,1),
-        new Vector2Int(0,-1),
+        new Vector2Int(0,-1)
     };
 
     void Start()
@@ -71,24 +70,22 @@ public class Si : MonoBehaviour
     {
         map = new int[height, width];
 
-        // 기본 전체 벽
+
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
                 map[y, x] = 0;
 
-        // DFS 미로 만들기
         MakePath(1, 1);
 
-        // 방 생성 확률 확 줄임
+        
         for (int y = 2; y < height - 2; y++)
         {
             for (int x = 2; x < width - 2; x++)
             {
-                if (rand.NextDouble() < 0.04)  
+                if (rand.NextDouble() < 0.04)
                 {
-                    int radius = rand.Next(2, 3); 
+                    int radius = rand.Next(2, 3);
                     for (int dy = -radius; dy <= radius; dy++)
-                    {
                         for (int dx = -radius; dx <= radius; dx++)
                         {
                             int gx = x + dx;
@@ -96,17 +93,17 @@ public class Si : MonoBehaviour
                             if (gx > 0 && gy > 0 && gx < width - 1 && gy < height - 1)
                                 map[gy, gx] = 1;
                         }
-                    }
                 }
             }
         }
 
-        float noiseRate = 0.05f; 
+        float noiseRate = 0.05f;
         for (int y = 1; y < height - 1; y++)
             for (int x = 1; x < width - 1; x++)
                 if (map[y, x] == 0 && rand.NextDouble() < noiseRate)
                     map[y, x] = 1;
 
+      
         for (int y = 1; y < height - 1; y++)
             for (int x = 1; x < width - 1; x++)
                 if (map[y, x] == 1)
@@ -119,9 +116,10 @@ public class Si : MonoBehaviour
 
         goal = new Vector2Int(width - 2, height - 2);
     }
+
     void MakePath(int x, int y)
     {
-        map[y, x] = 1; // 길
+        map[y, x] = 1;
 
         Vector2Int[] shuffled = (Vector2Int[])dirs.Clone();
         for (int i = 0; i < shuffled.Length; i++)
@@ -145,32 +143,6 @@ public class Si : MonoBehaviour
             }
         }
     }
-    public void ShowPath()
-    {
-        foreach (var p in path)
-            Instantiate(pathPrefab, new Vector3(p.x, 0.5f, p.y), Quaternion.identity, transform);
-
-        StartMove(); // <<--- 플레이어 경로 이동 실행
-    }
-
-    IEnumerator MoveAlongPath()
-    {
-        isMoving = true;
-
-        foreach (var p in path)
-        {
-            Vector3 targetPos = new Vector3(p.x, 0.5f, p.y);
-            player.position = targetPos;
-
-            yield return new WaitForSeconds(0.2f);
-        }
-
-        isMoving = false;
-    }
-
-    public void StartMove() { if (!isMoving) StartCoroutine(MoveAlongPath()); }
-
-    // 탈출 가능한지 확인 DFS
     bool FindPathDFS(int x, int y, bool[,] visited)
     {
         if (x == goal.x && y == goal.y)
@@ -190,8 +162,136 @@ public class Si : MonoBehaviour
         }
         return false;
     }
+    public void ShowShortestPath()
+    {
+        path = Astar(map, new Vector2Int(1, 1), goal);
 
-    // 시각화
+        foreach (var p in path)
+            Instantiate(pathPrefab, new Vector3(p.x, 0.5f, p.y), Quaternion.identity, transform);
+
+        StartMove();
+    }
+
+    List<Vector2Int> Astar(int[,] map, Vector2Int start, Vector2Int goal)
+    {
+        int h = map.GetLength(0);
+        int w = map.GetLength(1);
+
+        int[,] gCost = new int[h, w];
+        bool[,] visited = new bool[h, w];
+        Vector2Int?[,] parent = new Vector2Int?[h, w];
+
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                gCost[y, x] = int.MaxValue;
+
+        gCost[start.y, start.x] = 0;
+
+        List<Vector2Int> open = new List<Vector2Int>();
+        open.Add(start);
+
+        while (open.Count > 0)
+        {
+            int bestIndex = 0;
+            int bestF = F(open[0], gCost, goal);
+
+            for (int i = 1; i < open.Count; i++)
+            {
+                int f = F(open[i], gCost, goal);
+                if (f < bestF)
+                {
+                    bestF = f;
+                    bestIndex = i;
+                }
+            }
+
+            Vector2Int cur = open[bestIndex];
+            open.RemoveAt(bestIndex);
+
+            if (visited[cur.y, cur.x]) continue;
+            visited[cur.y, cur.x] = true;
+
+            if (cur == goal)
+                return Reconstruct(parent, start, goal);
+
+            foreach (var d in dirs)
+            {
+                int nx = cur.x + d.x;
+                int ny = cur.y + d.y;
+
+                if (!InBounds(nx, ny)) continue;
+                if (map[ny, nx] == 0) continue;
+                if (visited[ny, nx]) continue;
+
+                int moveCost = TileCost(map[ny, nx]) + WallPenalty(nx, ny);
+                int newG = gCost[cur.y, cur.x] + moveCost;
+
+                if (newG < gCost[ny, nx])
+                {
+                    gCost[ny, nx] = newG;
+                    parent[ny, nx] = cur;
+
+                    Vector2Int next = new Vector2Int(nx, ny);
+                    if (!open.Contains(next))
+                        open.Add(next);
+                }
+            }
+        }
+        return null;
+    }
+
+    int F(Vector2Int pos, int[,] gCost, Vector2Int goal)
+    {
+        return gCost[pos.y, pos.x] + Manhattan(pos, goal);
+    }
+
+    int Manhattan(Vector2Int a, Vector2Int b)
+    {
+        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+    }
+
+    int TileCost(int tile)
+    {
+        return tile == 1 ? 1 :
+               tile == 2 ? 3 :
+               tile == 3 ? 5 :
+               int.MaxValue;
+    }
+
+    int WallPenalty(int x, int y)
+    {
+        foreach (var d in dirs)
+        {
+            int nx = x + d.x;
+            int ny = y + d.y;
+
+            if (!InBounds(nx, ny)) continue;
+            if (map[ny, nx] == 0)
+                return 2;  
+        }
+        return 0;
+    }
+
+    bool InBounds(int x, int y)
+    {
+        return x >= 0 && y >= 0 && x < width && y < height;
+    }
+
+    List<Vector2Int> Reconstruct(Vector2Int?[,] parent, Vector2Int start, Vector2Int goal)
+    {
+        List<Vector2Int> p = new List<Vector2Int>();
+        Vector2Int? cur = goal;
+
+        while (cur.HasValue)
+        {
+            p.Add(cur.Value);
+            if (cur.Value == start) break;
+            cur = parent[cur.Value.y, cur.Value.x];
+        }
+
+        p.Reverse();
+        return p;
+    }
     void Visualize()
     {
         for (int y = 0; y < height; y++)
@@ -204,88 +304,31 @@ public class Si : MonoBehaviour
                     map[y, x] == 2 ? forestPrefab :
                     mudPrefab;
 
-                float posY = (map[y, x] == 0) ? 0.5f : 0f;  
+                float posY = map[y, x] == 0 ? 0.5f : 0f;
 
                 Instantiate(prefab, new Vector3(x, posY, y), Quaternion.identity, transform);
             }
         }
     }
-    // 버튼 R 누르면 Dijkstra 최단 경로 시각화
-    public void ShowShortestPath()
+
+    public void StartMove()
     {
-        path = Dijkstra(new Vector2Int(1, 1), goal);
+        if (!isMoving)
+            StartCoroutine(MoveAlongPath());
+    }
+
+    IEnumerator MoveAlongPath()
+    {
+        isMoving = true;
+
         foreach (var p in path)
-            Instantiate(pathPrefab, new Vector3(p.x, 0.5f, p.y), Quaternion.identity, transform);
-    }
-
-    // Dijkstra
-    List<Vector2Int> Dijkstra(Vector2Int start, Vector2Int goal)
-    {
-        int[,] dist = new int[height, width];
-        bool[,] visited = new bool[height, width];
-        Vector2Int?[,] parent = new Vector2Int?[height, width];
-
-        for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-                dist[y, x] = int.MaxValue;
-
-        dist[start.y, start.x] = 0;
-
-        SimplePriorityQueue<Vector2Int> pq = new SimplePriorityQueue<Vector2Int>();
-        pq.Enqueue(start, 0);
-
-        while (pq.Count > 0)
         {
-            Vector2Int cur = pq.Dequeue();
-            if (visited[cur.y, cur.x]) continue;
+            Vector3 targetPos = new Vector3(p.x, 0.5f, p.y);
+            player.position = targetPos;
 
-            visited[cur.y, cur.x] = true;
-
-            if (cur == goal) break;
-
-            foreach (var d in dirs)
-            {
-                int nx = cur.x + d.x;
-                int ny = cur.y + d.y;
-
-                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-                if (map[ny, nx] == 0) continue;
-
-                int newDist = dist[cur.y, cur.x] + TileCost(map[ny, nx]);
-
-                if (newDist < dist[ny, nx])
-                {
-                    dist[ny, nx] = newDist;
-                    parent[ny, nx] = cur;
-                    pq.Enqueue(new Vector2Int(nx, ny), newDist);
-                }
-            }
+            yield return new WaitForSeconds(0.2f);
         }
 
-        return ReconstructPath(parent, start, goal);
-    }
-
-    List<Vector2Int> ReconstructPath(Vector2Int?[,] parent, Vector2Int start, Vector2Int goal)
-    {
-        List<Vector2Int> path = new List<Vector2Int>();
-        Vector2Int? cur = goal;
-
-        while (cur.HasValue)
-        {
-            path.Add(cur.Value);
-            if (cur.Value == start) break;
-            cur = parent[cur.Value.y, cur.Value.x];
-        }
-
-        path.Reverse();
-        return path;
-    }
-
-    int TileCost(int tile)
-    {
-        return tile == 1 ? 1 :
-               tile == 2 ? 3 :
-               tile == 3 ? 5 :
-               int.MaxValue;
+        isMoving = false;
     }
 }
