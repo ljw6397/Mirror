@@ -13,6 +13,7 @@ public class Si : MonoBehaviour
     public GameObject mudPrefab;
     public GameObject pathPrefab;
     public GameObject playerPrefab;
+    public GameObject enemyPrefab;
 
     private Transform player;
     private bool isMoving = false;
@@ -21,6 +22,9 @@ public class Si : MonoBehaviour
     List<Vector2Int> path = new List<Vector2Int>();
     Vector2Int goal;
     System.Random rand = new System.Random();
+
+    private List<Vector2Int> enemyPositions = new List<Vector2Int>();
+    public int enemyPenaltyWeight = 5;
 
     Vector2Int[] dirs =
     {
@@ -45,6 +49,9 @@ public class Si : MonoBehaviour
             ShowShortestPath();
     }
 
+    // ============================================
+    // 미로 재생성 + 적 생성
+    // ============================================
     public void RegenerateMaze()
     {
         ClearOldObjects();
@@ -58,18 +65,48 @@ public class Si : MonoBehaviour
         }
 
         Visualize();
+        SpawnEnemies(6);   // <--- 적 생성 (원하는 숫자)
     }
 
     void ClearOldObjects()
     {
+        enemyPositions.Clear();
+
         foreach (Transform child in transform)
             Destroy(child.gameObject);
     }
 
+    // ============================================
+    // 적 생성
+    // ============================================
+    void SpawnEnemies(int count)
+    {
+        List<Vector2Int> validCells = new List<Vector2Int>();
+
+        for (int y = 1; y < height - 1; y++)
+            for (int x = 1; x < width - 1; x++)
+                if (map[y, x] != 0)
+                    validCells.Add(new Vector2Int(x, y));
+
+        for (int i = 0; i < count; i++)
+        {
+            if (validCells.Count == 0) break;
+
+            int r = rand.Next(validCells.Count);
+            Vector2Int pos = validCells[r];
+            validCells.RemoveAt(r);
+
+            enemyPositions.Add(pos);
+            Instantiate(enemyPrefab, new Vector3(pos.x, 0.5f, pos.y), Quaternion.identity, transform);
+        }
+    }
+
+    // ============================================
+    // 미로 생성 로직
+    // ============================================
     void GenerateMaze()
     {
         map = new int[height, width];
-
 
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
@@ -77,7 +114,6 @@ public class Si : MonoBehaviour
 
         MakePath(1, 1);
 
-        
         for (int y = 2; y < height - 2; y++)
         {
             for (int x = 2; x < width - 2; x++)
@@ -103,7 +139,6 @@ public class Si : MonoBehaviour
                 if (map[y, x] == 0 && rand.NextDouble() < noiseRate)
                     map[y, x] = 1;
 
-      
         for (int y = 1; y < height - 1; y++)
             for (int x = 1; x < width - 1; x++)
                 if (map[y, x] == 1)
@@ -143,6 +178,7 @@ public class Si : MonoBehaviour
             }
         }
     }
+
     bool FindPathDFS(int x, int y, bool[,] visited)
     {
         if (x == goal.x && y == goal.y)
@@ -162,6 +198,10 @@ public class Si : MonoBehaviour
         }
         return false;
     }
+
+    // ============================================
+    // A* 최단거리 탐색 (적 회피 휴리스틱 포함)
+    // ============================================
     public void ShowShortestPath()
     {
         path = Astar(map, new Vector2Int(1, 1), goal);
@@ -223,7 +263,7 @@ public class Si : MonoBehaviour
                 if (map[ny, nx] == 0) continue;
                 if (visited[ny, nx]) continue;
 
-                int moveCost = TileCost(map[ny, nx]) + WallPenalty(nx, ny);
+                int moveCost = TileCost(map[ny, nx]);
                 int newG = gCost[cur.y, cur.x] + moveCost;
 
                 if (newG < gCost[ny, nx])
@@ -231,9 +271,8 @@ public class Si : MonoBehaviour
                     gCost[ny, nx] = newG;
                     parent[ny, nx] = cur;
 
-                    Vector2Int next = new Vector2Int(nx, ny);
-                    if (!open.Contains(next))
-                        open.Add(next);
+                    if (!open.Contains(new Vector2Int(nx, ny)))
+                        open.Add(new Vector2Int(nx, ny));
                 }
             }
         }
@@ -242,12 +281,31 @@ public class Si : MonoBehaviour
 
     int F(Vector2Int pos, int[,] gCost, Vector2Int goal)
     {
-        return gCost[pos.y, pos.x] + Manhattan(pos, goal);
+        return gCost[pos.y, pos.x]
+               + Manhattan(pos, goal)
+               + EnemyHeuristicCost(pos); // ✔ 추가된 부분
     }
 
     int Manhattan(Vector2Int a, Vector2Int b)
     {
         return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+    }
+
+    // ============================================
+    // 적 회피 휴리스틱
+    // ============================================
+    int EnemyHeuristicCost(Vector2Int pos)
+    {
+        if (enemyPositions.Count == 0) return 0;
+
+        int minDist = int.MaxValue;
+        foreach (var e in enemyPositions)
+        {
+            int d = Manhattan(pos, e);
+            if (d < minDist) minDist = d;
+        }
+
+        return Mathf.Max(0, enemyPenaltyWeight - minDist);
     }
 
     int TileCost(int tile)
@@ -256,20 +314,6 @@ public class Si : MonoBehaviour
                tile == 2 ? 3 :
                tile == 3 ? 5 :
                int.MaxValue;
-    }
-
-    int WallPenalty(int x, int y)
-    {
-        foreach (var d in dirs)
-        {
-            int nx = x + d.x;
-            int ny = y + d.y;
-
-            if (!InBounds(nx, ny)) continue;
-            if (map[ny, nx] == 0)
-                return 2;  
-        }
-        return 0;
     }
 
     bool InBounds(int x, int y)
@@ -292,6 +336,7 @@ public class Si : MonoBehaviour
         p.Reverse();
         return p;
     }
+
     void Visualize()
     {
         for (int y = 0; y < height; y++)
