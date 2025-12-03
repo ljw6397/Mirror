@@ -675,6 +675,8 @@ MonoBehaviour:
   mudPrefab: {fileID: 7843498741191971564, guid: 550fd51033c788347b206fb6d5a32fc3, type: 3}
   pathPrefab: {fileID: 9220803092853138994, guid: b675996192ee30d41ac981d2a9cb2a23, type: 3}
   playerPrefab: {fileID: 3680795701449215803, guid: ff2fd0737ef5ee943a53d4a4fdfb571f, type: 3}
+  enemyPrefab: {fileID: 4736746441753102400, guid: 2422578e72cceb34f849ae52fd662f05, type: 3}
+  enemyPenaltyWeight: 5
 --- !u!4 &1011603977
 Transform:
   m_ObjectHideFlags: 0
